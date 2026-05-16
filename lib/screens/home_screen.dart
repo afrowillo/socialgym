@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../services/progress_service.dart';
 import '../widgets/stat_card.dart';
-import 'prompt_screen.dart';
 import 'challenge_screen.dart';
+import 'prompt_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,9 +13,40 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final ProgressService progressService = ProgressService();
+
   int xp = 0;
   int completedReps = 0;
   int completedChallenges = 0;
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    loadProgress();
+  }
+
+  Future<void> loadProgress() async {
+    final int savedXp = await progressService.loadXp();
+    final int savedReps = await progressService.loadCompletedReps();
+    final int savedChallenges =
+        await progressService.loadCompletedChallenges();
+
+    setState(() {
+      xp = savedXp;
+      completedReps = savedReps;
+      completedChallenges = savedChallenges;
+      isLoading = false;
+    });
+  }
+
+  Future<void> saveProgress() async {
+    await progressService.saveProgress(
+      xp: xp,
+      completedReps: completedReps,
+      completedChallenges: completedChallenges,
+    );
+  }
 
   Future<void> startSpeakingSession(BuildContext context) async {
     final bool? repCompleted = await Navigator.push(
@@ -29,6 +61,8 @@ class _HomeScreenState extends State<HomeScreen> {
         xp += 10;
         completedReps++;
       });
+
+      await saveProgress();
     }
   }
 
@@ -45,11 +79,52 @@ class _HomeScreenState extends State<HomeScreen> {
         xp += 20;
         completedChallenges++;
       });
+
+      await saveProgress();
     }
+  }
+
+  Future<void> resetProgress() async {
+    await progressService.resetProgress();
+
+    setState(() {
+      xp = 0;
+      completedReps = 0;
+      completedChallenges = 0;
+    });
+  }
+
+  int get totalActivities {
+    return completedReps + completedChallenges;
+  }
+
+  String get encouragementMessage {
+    if (xp == 0) {
+      return "Complete your first activity to earn XP.";
+    }
+
+    if (xp < 50) {
+      return "Good start. Keep building the habit.";
+    }
+
+    if (xp < 150) {
+      return "You are gaining momentum. Keep showing up.";
+    }
+
+    return "Strong progress. Your confidence reps are stacking up.";
   }
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF7F4FF),
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7F4FF),
       body: SafeArea(
@@ -94,7 +169,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       SizedBox(height: 12),
                       Text(
-                        "Complete one speaking exercise and one confidence challenge.",
+                        "Complete one speaking rep and one confidence challenge.",
                         style: TextStyle(fontSize: 16),
                       ),
                     ],
@@ -120,24 +195,30 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 16),
                 SizedBox(
-                 width: double.infinity,
-                 child: StatCard(
-                  title: "XP",
-                  value: "$xp",
-                 ),
+                  width: double.infinity,
+                  child: StatCard(
+                    title: "XP",
+                    value: "$xp",
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: StatCard(
+                    title: "Total Activities",
+                    value: "$totalActivities",
+                  ),
                 ),
                 const SizedBox(height: 24),
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.deepPurple.withValues(alpha: 0.08),
+                    color: Colors.deepPurple.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    xp == 0
-                        ? "Complete your first activity to earn XP."
-                        : "Nice. You have earned $xp XP so far.",
+                    encouragementMessage,
                     style: const TextStyle(
                       fontSize: 16,
                       color: Colors.black87,
@@ -166,6 +247,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       "Start Confidence Challenge",
                       style: TextStyle(fontSize: 18),
                     ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Center(
+                  child: TextButton(
+                    onPressed: resetProgress,
+                    child: const Text("Reset Progress"),
                   ),
                 ),
               ],
